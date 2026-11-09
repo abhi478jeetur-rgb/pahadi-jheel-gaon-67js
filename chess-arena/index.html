@@ -1,0 +1,955 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>शतरंज अखाड़ा — राजाओं का युद्ध | 67js Game</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0e1420; overflow: hidden;
+    font-family: "Segoe UI", system-ui, sans-serif; }
+  #scene { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  #scene:active { cursor: grabbing; }
+  .card { position: fixed; left: 14px; top: 14px; color: #f3ead9; z-index: 5;
+    background: rgba(10, 13, 22, .62); border: 1px solid rgba(255,255,255,.15);
+    border-radius: 12px; padding: 10px 14px; backdrop-filter: blur(6px); max-width: 80vw; }
+  .card h1 { margin: 0; font-size: 19px; font-weight: 650; }
+  .card p { margin: 4px 0 0; font-size: 13.5px; opacity: .92; }
+  #status-line { font-weight: 600; color: #ffd97a; }
+  .panel { position: fixed; z-index: 5; color: #eee7d6;
+    background: rgba(10, 13, 22, .55); border: 1px solid rgba(255,255,255,.13);
+    border-radius: 12px; backdrop-filter: blur(6px); }
+  #btns { right: 14px; top: 14px; padding: 8px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  #btns button { background: rgba(255,255,255,.1); color: #f3ead9; border: 1px solid rgba(255,255,255,.22);
+    border-radius: 8px; padding: 6px 10px; font-size: 13px; cursor: pointer; font-family: inherit; }
+  #btns button:hover { background: rgba(255,255,255,.22); }
+  #tray { left: 14px; bottom: 14px; padding: 8px 12px; font-size: 15px; max-width: 44vw; }
+  #tray .cap-b { color: #7ea6ff; } #tray .cap-r { color: #ff8a7a; }
+  #tray div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #log { right: 14px; bottom: 14px; padding: 8px 12px; font-size: 12.5px; width: 228px;
+    max-height: 168px; overflow-y: auto; line-height: 1.5; }
+  #log b { color: #ffd97a; font-weight: 600; }
+  .hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; color: #e8e2d2; z-index: 4;
+    background: rgba(10, 13, 22, .5); border-radius: 999px; padding: 6px 14px;
+    font-size: 12.5px; border: 1px solid rgba(255,255,255,.12); white-space: nowrap; }
+  #overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(5, 8, 14, .55); z-index: 8; }
+  #overlay .box { text-align: center; color: #f7efdb; background: rgba(12, 15, 25, .85);
+    border: 1px solid rgba(255, 217, 122, .4); border-radius: 16px; padding: 26px 34px; }
+  #overlay h2 { margin: 0 0 8px; font-size: 26px; }
+  #overlay p { margin: 0 0 16px; font-size: 15px; opacity: .9; }
+  #overlay button { background: #c9962e; color: #14100a; border: 0; border-radius: 10px;
+    padding: 10px 20px; font-size: 15px; font-weight: 650; cursor: pointer; font-family: inherit; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #f3ead9; font-size: 17px; z-index: 9; background: #0e1420; text-align: center; padding: 20px; }
+  #loading.err { color: #ffb4a2; font-size: 15px; line-height: 1.55; }
+  @media (max-width: 720px) { #log { display: none; } .hint { display: none; } }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "67js": "./build/67.module.js",
+    "67js/addons/agent-scene": "./build/agent-scene.js"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div class="card">
+  <h1>♞ शतरंज अखाड़ा — राजाओं का युद्ध</h1>
+  <p id="status-line">खेल तैयार हो रहा है…</p>
+  <p>तुम नीले राजा हो। मोहरा चुनो, फिर हरी घेरी वाली जगह पर क्लिक करो। मारने पर सैनिक असली लड़ाई लड़ेंगे!</p>
+</div>
+
+<div class="panel" id="btns">
+  <button id="btn-new">↻ नया खेल</button>
+  <button id="btn-level">कठिनाई: मध्यम</button>
+  <button id="btn-view">दृश्य: अखाड़ा</button>
+  <button id="btn-sound">आवाज़: चालू</button>
+</div>
+
+<div class="panel" id="tray">
+  <div>तुमने मारे: <span class="cap-r" id="cap-by-b">—</span></div>
+  <div>लाल राजा ने मारे: <span class="cap-b" id="cap-by-r">—</span></div>
+</div>
+
+<div class="panel" id="log"></div>
+<div class="hint">कैमरा: खींचकर घुमाओ • स्क्रॉल से ज़ूम • मोहरे पर क्लिक = चाल चुनना</div>
+
+<div id="overlay"><div class="box">
+  <h2 id="ov-title">🏆 जीत!</h2>
+  <p id="ov-text"></p>
+  <button id="btn-again">फिर से खेलो</button>
+</div></div>
+
+<div id="loading">अखाड़ा सज रहा है… सैनिक तैयार हो रहे हैं ⚔️</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const loadingEl = $('loading');
+const fail = (msg) => { loadingEl.className = 'err'; loadingEl.textContent = msg; };
+
+// ---------- छोटे matrix सहायक (column-major) ----------
+const I16 = () => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+function mul(a, b) {
+  const o = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+    let s = 0; for (let k = 0; k < 4; k++) s += a[k*4+r] * b[c*4+k];
+    o[c*4+r] = s;
+  }
+  return o;
+}
+function mTrans(x, y, z) { const m = I16(); m[12] = x; m[13] = y; m[14] = z; return m; }
+function mYaw(t) { const c = Math.cos(t), s = Math.sin(t);
+  return new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]); }
+function mRx(t) { const c = Math.cos(t), s = Math.sin(t);
+  return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]); }
+function mRz(t) { const c = Math.cos(t), s = Math.sin(t);
+  return new Float32Array([c,s,0,0, -s,c,0,0, 0,0,1,0, 0,0,0,1]); }
+function mScale(s) { const m = I16(); m[0] = s; m[5] = s; m[10] = s; return m; }
+
+const BASE_Y = 1.3;
+const sqToXZ = (sq) => [ (sq % 8 - 3.5) * 4, (3.5 - (sq >> 3)) * 4 ];
+const alg = (sq) => 'abcdefgh'[sq % 8] + ((sq >> 3) + 1);
+
+try {
+  const [{ Renderer67 }, agent] = await Promise.all([
+    import('67js'), import('67js/addons/agent-scene'),
+  ]);
+  const { createAgentScene, loadAllAgentSceneModules, resolveAgentShadow } = agent;
+  const recipe = await (await fetch('scene.json')).json();
+  await loadAllAgentSceneModules();
+  const scene = createAgentScene(recipe);
+  const canvas = $('scene');
+  const renderer = new Renderer67(canvas, scene.parts, {
+    ground: false, hdr: true, depth: true, samples: 4, memoryBudgetMiB: 256,
+    world: scene.environment?.world, environment: scene.environment,
+    shadowBounds: resolveAgentShadow(scene.shadow, scene.environment?.lightDirection),
+  });
+
+  // ---------- parts और actors ----------
+  const partByName = new Map();
+  for (const p of scene.parts) partByName.set(p.name, p);
+  let partsDirty = true;
+  const markDirty = () => { partsDirty = true; };
+
+  const GRIPS = { p: [0.58, 1.05, -0.12], n: [0.5, 1.8, -0.3], b: [0.55, 1.7, -0.1],
+                  q: [0.55, 2.05, -0.1], k: [0.6, 2.15, -0.15], r: null };
+  function makeActor(id, kind, team, k = 1) {
+    const parts = [];
+    let base = null, wpn = null;
+    for (const p of scene.parts) {
+      if (!p.name.startsWith(id + '-')) continue;
+      const entry = { part: p, local: null };
+      parts.push(entry);
+      if (p.name === id + '-base') base = entry;
+      if (p.name === id + '-wpn') wpn = entry;
+    }
+    if (!base) throw new Error('actor base missing: ' + id);
+    const bm = base.part.matrix;
+    const origin = [bm[12], bm[13] - 0.13 * k, bm[14]];
+    for (const e of parts) {
+      const m = new Float32Array(e.part.matrix);
+      m[12] -= origin[0]; m[13] -= origin[1]; m[14] -= origin[2];
+      e.local = m;
+    }
+    let grip = GRIPS[kind] ? [...GRIPS[kind]] : null;
+    if (grip && team === 'r') grip = [-grip[0], grip[1], -grip[2]];
+    if (grip) for (let i = 0; i < 3; i++) grip[i] *= k;
+    const a = { id, kind, team, k, parts, wpn, grip,
+      pos: [...origin], yaw: 0, tiltX: 0, tiltZ: 0, scaleF: 1, wpnSwing: 0 };
+    applyActor(a);
+    return a;
+  }
+  function applyActor(a) {
+    let M = mTrans(a.pos[0], a.pos[1], a.pos[2]);
+    M = mul(M, mYaw(a.yaw));
+    if (a.tiltX) M = mul(M, mRx(a.tiltX));
+    if (a.tiltZ) M = mul(M, mRz(a.tiltZ));
+    if (a.scaleF !== 1) M = mul(M, mScale(a.scaleF));
+    for (const e of a.parts) {
+      let L = e.local;
+      if (a.wpn && e === a.wpn && a.wpnSwing && a.grip) {
+        const g = a.grip;
+        let S = mTrans(g[0], g[1], g[2]);
+        S = mul(S, mRx(a.wpnSwing * (a.team === 'b' ? -1 : 1)));
+        S = mul(S, mTrans(-g[0], -g[1], -g[2]));
+        L = mul(S, L);
+      }
+      e.part.matrix.set(mul(M, L));
+    }
+    markDirty();
+  }
+
+  const actors = {};
+  const backOrder = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'];
+  for (const team of ['b', 'r']) {
+    for (let f = 0; f < 8; f++) {
+      const kind = backOrder[f];
+      const suffix = kind === 'q' || kind === 'k' ? '' : (f < 4 ? '0' : '1');
+      actors[`pc-${team}-${kind}${suffix}`] = makeActor(`pc-${team}-${kind}${suffix}`, kind, team);
+      actors[`pc-${team}-p${f}`] = makeActor(`pc-${team}-p${f}`, 'p', team);
+    }
+    for (let i = 0; i < 2; i++)
+      actors[`pc-${team}-qx${i}`] = makeActor(`pc-${team}-qx${i}`, 'q', team);
+  }
+  const throneKings = { b: makeActor('tk-b', 'k', 'b', 1.9), r: makeActor('tk-r', 'k', 'r', 1.9) };
+
+  // markers
+  const markers = { moves: [], caps: [], sel: null, check: null };
+  for (let i = 0; i < 28; i++) markers.moves.push(partByName.get('mk-' + i));
+  for (let i = 0; i < 6; i++) markers.caps.push(partByName.get('mkc-' + i));
+  markers.sel = partByName.get('mk-sel');
+  markers.check = partByName.get('mk-check');
+  const markerHome = new Map();
+  for (const p of [...markers.moves, ...markers.caps, markers.sel, markers.check])
+    markerHome.set(p, new Float32Array(p.matrix));
+  function placeMarker(p, sq, dy = 0.06) {
+    if (!p) return;
+    const m = new Float32Array(markerHome.get(p));
+    const [x, z] = sqToXZ(sq);
+    m[12] = x; m[13] = BASE_Y + dy; m[14] = z;
+    p.matrix.set(m); markDirty();
+  }
+  function parkMarker(p) {
+    if (!p) return;
+    p.matrix.set(markerHome.get(p)); markDirty();
+  }
+  function clearMarkers() {
+    for (const p of markers.moves) parkMarker(p);
+    for (const p of markers.caps) parkMarker(p);
+    parkMarker(markers.sel);
+  }
+
+  // ---------- आवाज़ (WebAudio synth) ----------
+  let audioCtx = null, soundOn = true;
+  function beep(freq, dur, type = 'sine', gain = 0.12, when = 0, slide = 0) {
+    if (!soundOn) return;
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime + when;
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = type; o.frequency.setValueAtTime(freq, t0);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t0 + dur);
+      g.gain.setValueAtTime(gain, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      o.connect(g).connect(audioCtx.destination);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    } catch {}
+  }
+  function noiseBurst(dur = 0.12, gain = 0.2, when = 0) {
+    if (!soundOn) return;
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime + when;
+      const len = Math.max(1, (audioCtx.sampleRate * dur) | 0);
+      const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = audioCtx.createBufferSource(); src.buffer = buf;
+      const g = audioCtx.createGain(); g.gain.value = gain;
+      const f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900;
+      src.connect(f).connect(g).connect(audioCtx.destination);
+      src.start(t0);
+    } catch {}
+  }
+  const sfx = {
+    select: () => beep(660, 0.07, 'triangle', 0.08),
+    step: () => noiseBurst(0.05, 0.05),
+    hit: () => { noiseBurst(0.14, 0.3); beep(90, 0.18, 'sine', 0.3, 0, -40); },
+    fall: () => beep(300, 0.4, 'sawtooth', 0.06, 0, -220),
+    check: () => { beep(880, 0.12, 'triangle', 0.12); beep(1174, 0.16, 'triangle', 0.12, 0.12); },
+    win: () => [523, 659, 784, 1046].forEach((f, i) => beep(f, 0.22, 'triangle', 0.12, i * 0.13)),
+    lose: () => [392, 330, 262, 196].forEach((f, i) => beep(f, 0.25, 'triangle', 0.1, i * 0.15)),
+  };
+
+  // ---------- chess logic ----------
+  const NAMES = { p: 'प्यादा', n: 'घोड़ा', b: 'ऊँट', r: 'हाथी', q: 'रानी', k: 'राजा' };
+  const GLYPH = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
+  const VAL = { p: 100, n: 320, b: 330, r: 500, q: 950, k: 20000 };
+  let board, turn, epSq, gameOver, selected, legalCache, moveLog, capturedBy;
+  let spareUsed = { b: 0, r: 0 };
+
+  function newGameState() {
+    board = new Array(64).fill(null);
+    const put = (id, type, color, sq) => {
+      board[sq] = { id, type, color, sq, alive: true, hasMoved: false, actor: actors[id] };
+    };
+    for (let f = 0; f < 8; f++) {
+      const kind = backOrder[f];
+      const suffix = kind === 'q' || kind === 'k' ? '' : (f < 4 ? '0' : '1');
+      put(`pc-b-${kind}${suffix}`, kind, 'b', f);
+      put(`pc-b-p${f}`, 'p', 'b', 8 + f);
+      put(`pc-r-p${f}`, 'p', 'r', 48 + f);
+      put(`pc-r-${kind}${suffix}`, kind, 'r', 56 + f);
+    }
+    turn = 'b'; epSq = -1; gameOver = false; selected = -1;
+    legalCache = []; moveLog = []; capturedBy = { b: [], r: [] };
+    spareUsed = { b: 0, r: 0 };
+  }
+
+  const inB = (f, r) => f >= 0 && f < 8 && r >= 0 && r < 8;
+  function isAttacked(bd, sq, by) {
+    const f = sq % 8, r = sq >> 3;
+    // pyade
+    const pr = by === 'b' ? r - 1 : r + 1;
+    for (const df of [-1, 1]) {
+      if (inB(f + df, pr)) {
+        const p = bd[pr * 8 + f + df];
+        if (p && p.color === by && p.type === 'p') return true;
+      }
+    }
+    for (const [df, dr] of [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]]) {
+      if (inB(f + df, r + dr)) {
+        const p = bd[(r + dr) * 8 + f + df];
+        if (p && p.color === by && p.type === 'n') return true;
+      }
+    }
+    for (let df = -1; df <= 1; df++) for (let dr = -1; dr <= 1; dr++) {
+      if (!df && !dr) continue;
+      if (inB(f + df, r + dr)) {
+        const p = bd[(r + dr) * 8 + f + df];
+        if (p && p.color === by && p.type === 'k') return true;
+      }
+    }
+    const scan = (dirs, types) => {
+      for (const [df, dr] of dirs) {
+        let nf = f + df, nr = r + dr;
+        while (inB(nf, nr)) {
+          const p = bd[nr * 8 + nf];
+          if (p) { if (p.color === by && types.includes(p.type)) return true; break; }
+          nf += df; nr += dr;
+        }
+      }
+      return false;
+    };
+    if (scan([[1,0],[-1,0],[0,1],[0,-1]], ['r', 'q'])) return true;
+    if (scan([[1,1],[1,-1],[-1,1],[-1,-1]], ['b', 'q'])) return true;
+    return false;
+  }
+
+  function pseudoMoves(bd, sq, ep) {
+    const p = bd[sq]; if (!p) return [];
+    const f = sq % 8, r = sq >> 3, out = [];
+    const add = (to, extra = {}) => out.push({ from: sq, to, piece: p, captured: bd[to] || null, ...extra });
+    if (p.type === 'p') {
+      const dir = p.color === 'b' ? 1 : -1;
+      const startRank = p.color === 'b' ? 1 : 6;
+      const promoRank = p.color === 'b' ? 7 : 0;
+      const one = sq + dir * 8;
+      if (inB(f, r + dir) && !bd[one]) {
+        add(one, { promo: (r + dir) === promoRank });
+        const two = sq + dir * 16;
+        if (r === startRank && !bd[two]) add(two, { double: true });
+      }
+      for (const df of [-1, 1]) {
+        const nf = f + df, nr = r + dir;
+        if (!inB(nf, nr)) continue;
+        const to = nr * 8 + nf;
+        if (bd[to] && bd[to].color !== p.color) add(to, { promo: nr === promoRank });
+        else if (to === ep) {
+          const capSq = r * 8 + nf;
+          if (bd[capSq] && bd[capSq].type === 'p' && bd[capSq].color !== p.color)
+            add(to, { epCapture: bd[capSq] });
+        }
+      }
+    } else if (p.type === 'n' || p.type === 'k') {
+      const offs = p.type === 'n'
+        ? [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]]
+        : [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+      for (const [df, dr] of offs) {
+        const nf = f + df, nr = r + dr;
+        if (!inB(nf, nr)) continue;
+        const to = nr * 8 + nf;
+        if (!bd[to] || bd[to].color !== p.color) add(to);
+      }
+      if (p.type === 'k' && !p.hasMoved) {
+        const home = p.color === 'b' ? 0 : 56;
+        const enemy = p.color === 'b' ? 'r' : 'b';
+        if (sq === home + 4 && !isAttacked(bd, sq, enemy)) {
+          const rookK = bd[home + 7];
+          if (rookK && rookK.type === 'r' && !rookK.hasMoved &&
+              !bd[home + 5] && !bd[home + 6] &&
+              !isAttacked(bd, home + 5, enemy) && !isAttacked(bd, home + 6, enemy))
+            add(home + 6, { castle: 'K', rookFrom: home + 7, rookTo: home + 5 });
+          const rookQ = bd[home + 0];
+          if (rookQ && rookQ.type === 'r' && !rookQ.hasMoved &&
+              !bd[home + 1] && !bd[home + 2] && !bd[home + 3] &&
+              !isAttacked(bd, home + 3, enemy) && !isAttacked(bd, home + 2, enemy))
+            add(home + 2, { castle: 'Q', rookFrom: home + 0, rookTo: home + 3 });
+        }
+      }
+    } else {
+      const dirs = p.type === 'b' ? [[1,1],[1,-1],[-1,1],[-1,-1]]
+        : p.type === 'r' ? [[1,0],[-1,0],[0,1],[0,-1]]
+        : [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+      for (const [df, dr] of dirs) {
+        let nf = f + df, nr = r + dr;
+        while (inB(nf, nr)) {
+          const to = nr * 8 + nf;
+          if (!bd[to]) add(to);
+          else { if (bd[to].color !== p.color) add(to); break; }
+          nf += df; nr += dr;
+        }
+      }
+    }
+    return out;
+  }
+
+  function applyOnBoard(bd, m, epRef) {
+    const undo = { captured: m.captured || null, epCaptured: m.epCapture || null,
+      prevEp: epRef.v, pieceType: m.piece.type, hasMoved: m.piece.hasMoved,
+      rook: null, rookHasMoved: false };
+    bd[m.from] = null;
+    bd[m.to] = m.piece;
+    m.piece.sq = m.to; m.piece.hasMoved = true;
+    if (m.epCapture) { bd[m.epCapture.sq] = null; m.epCapture.alive = false; }
+    if (m.captured) m.captured.alive = false;
+    if (m.promo) m.piece.type = 'q';
+    if (m.castle) {
+      const rook = bd[m.rookFrom];
+      bd[m.rookFrom] = null; bd[m.rookTo] = rook;
+      undo.rook = rook; undo.rookHasMoved = rook.hasMoved;
+      rook.sq = m.rookTo; rook.hasMoved = true;
+    }
+    epRef.v = m.double ? (m.from + m.to) / 2 : -1;
+    return undo;
+  }
+  function undoOnBoard(bd, m, undo, epRef) {
+    bd[m.from] = m.piece; bd[m.to] = null;
+    m.piece.sq = m.from; m.piece.hasMoved = undo.hasMoved;
+    m.piece.type = undo.pieceType;
+    if (undo.captured) { bd[undo.captured.sq] = undo.captured; undo.captured.alive = true; }
+    if (undo.epCaptured) { bd[undo.epCaptured.sq] = undo.epCaptured; undo.epCaptured.alive = true; }
+    if (m.castle && undo.rook) {
+      bd[m.rookFrom] = undo.rook; bd[m.rookTo] = null;
+      undo.rook.sq = m.rookFrom; undo.rook.hasMoved = undo.rookHasMoved;
+    }
+    epRef.v = undo.prevEp;
+  }
+  function kingSq(bd, color) {
+    for (let i = 0; i < 64; i++) if (bd[i] && bd[i].type === 'k' && bd[i].color === color) return i;
+    return -1;
+  }
+  function legalMoves(bd, color, ep) {
+    const epRef = { v: ep };
+    const out = [];
+    for (let sq = 0; sq < 64; sq++) {
+      const p = bd[sq];
+      if (!p || p.color !== color) continue;
+      for (const m of pseudoMoves(bd, sq, epRef.v)) {
+        const u = applyOnBoard(bd, m, epRef);
+        if (!isAttacked(bd, kingSq(bd, color), color === 'b' ? 'r' : 'b')) out.push(m);
+        undoOnBoard(bd, m, u, epRef);
+      }
+    }
+    return out;
+  }
+
+  // ---------- AI ----------
+  const PST = {
+    p: [0,0,0,0,0,0,0,0, 5,10,10,-10,-10,10,10,5, 5,-5,-10,0,0,-10,-5,5, 0,0,0,20,20,0,0,0,
+        5,5,10,25,25,10,5,5, 10,10,20,30,30,20,10,10, 50,50,50,50,50,50,50,50, 0,0,0,0,0,0,0,0],
+    n: [-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,0,5,5,0,-20,-40, -30,5,10,15,15,10,5,-30,
+        -30,0,15,20,20,15,0,-30, -30,5,15,20,20,15,5,-30, -30,0,10,15,15,10,0,-30,
+        -40,-20,0,0,0,0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50],
+    b: [-20,-10,-10,-10,-10,-10,-10,-20, -10,5,0,0,0,0,5,-10, -10,10,10,10,10,10,10,-10,
+        -10,0,10,10,10,10,0,-10, -10,5,5,10,10,5,5,-10, -10,0,5,10,10,5,0,-10,
+        -10,0,0,0,0,0,0,-10, -20,-10,-10,-10,-10,-10,-10,-20],
+    r: [0,0,5,10,10,5,0,0, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5,
+        -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, 5,10,10,15,15,10,10,5, 0,0,5,10,10,5,0,0],
+    q: [-20,-10,-10,-5,-5,-10,-10,-20, -10,0,5,0,0,5,0,-10, -10,5,5,5,5,5,5,-10,
+        -5,0,5,5,5,5,0,-5, 0,0,5,5,5,5,0,-5, -10,0,5,5,5,5,0,-10,
+        -10,0,0,0,0,0,0,-10, -20,-10,-10,-5,-5,-10,-10,-20],
+    k: [20,30,10,0,0,10,30,20, 20,20,0,0,0,0,20,20, -10,-20,-20,-20,-20,-20,-20,-10,
+        -20,-30,-30,-40,-40,-30,-30,-20, -30,-40,-40,-50,-50,-40,-40,-30,
+        -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30,
+        -20,-30,-30,-40,-40,-30,-30,-20],
+  };
+  function evaluate(bd) {
+    let s = 0;
+    for (let sq = 0; sq < 64; sq++) {
+      const p = bd[sq]; if (!p) continue;
+      const f = sq % 8, r = sq >> 3;
+      const idx = p.color === 'b' ? (7 - r) * 8 + f : r * 8 + f;
+      const v = VAL[p.type] + (PST[p.type] ? PST[p.type][idx] : 0);
+      s += p.color === 'b' ? v : -v;
+    }
+    return s;
+  }
+  let aiDepth = 2, aiNoise = 12;
+  function negamax(bd, depth, alpha, beta, color, epRef) {
+    const moves = legalMoves(bd, color, epRef.v);
+    const enemy = color === 'b' ? 'r' : 'b';
+    if (moves.length === 0) {
+      if (isAttacked(bd, kingSq(bd, color), enemy)) return -100000 - depth;
+      return 0;
+    }
+    if (depth === 0) return (color === 'b' ? 1 : -1) * evaluate(bd);
+    moves.sort((a, b2) => (b2.captured ? VAL[b2.captured.type] : 0) - (a.captured ? VAL[a.captured.type] : 0));
+    let best = -Infinity;
+    for (const m of moves) {
+      const savedEp = epRef.v;
+      const u = applyOnBoard(bd, m, epRef);
+      const sc = -negamax(bd, depth - 1, -beta, -alpha, enemy, epRef);
+      undoOnBoard(bd, m, u, epRef);
+      epRef.v = savedEp;
+      if (sc > best) best = sc;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+  function pickAiMove() {
+    const epRef = { v: epSq };
+    const moves = legalMoves(board, 'r', epSq);
+    if (!moves.length) return null;
+    let bestScore = -Infinity, bestMoves = [];
+    for (const m of moves) {
+      const savedEp = epRef.v;
+      const u = applyOnBoard(board, m, epRef);
+      const sc = -negamax(board, aiDepth - 1, -Infinity, Infinity, 'b', epRef)
+        + (m.captured ? VAL[m.captured.type] * 0.05 : 0)
+        + Math.random() * aiNoise;
+      undoOnBoard(board, m, u, epRef);
+      epRef.v = savedEp;
+      if (sc > bestScore + 0.001) { bestScore = sc; bestMoves = [m]; }
+      else if (Math.abs(sc - bestScore) <= 0.001) bestMoves.push(m);
+    }
+    return bestMoves[(Math.random() * bestMoves.length) | 0];
+  }
+
+  // ---------- animation ----------
+  const tweens = [];
+  const easeIO = (k) => k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+  const easeOut = (k) => 1 - Math.pow(1 - k, 3);
+  function tween(dur, onU, ease = easeIO) {
+    return new Promise((res) => tweens.push({ t0: performance.now(), dur: dur * 1000, onU, ease, res }));
+  }
+  function stepTweens(now) {
+    for (let i = tweens.length - 1; i >= 0; i--) {
+      const t = tweens[i];
+      let k = (now - t.t0) / t.dur;
+      if (k >= 1) k = 1;
+      t.onU(t.ease(k));
+      if (k === 1) { tweens.splice(i, 1); t.res(); }
+    }
+  }
+  let camShake = 0;
+  function faceYaw(a, dx, dz) {
+    const s = a.team === 'b' ? -1 : 1;
+    return Math.atan2(s * dx, s * dz);
+  }
+  function lerpAngle(a, b, k) {
+    let d = b - a;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return a + d * k;
+  }
+  async function walkTo(a, toPos, durScale = 1) {
+    const from = [...a.pos];
+    const dx = toPos[0] - from[0], dz = toPos[2] - from[2];
+    const dist = Math.hypot(dx, dz);
+    if (dist < 0.01) return;
+    const targetYaw = faceYaw(a, dx, dz);
+    const startYaw = a.yaw;
+    const dur = Math.min(1.15, Math.max(0.3, dist * 0.16)) * durScale;
+    const isKnight = a.kind === 'n';
+    let steps = 0;
+    await tween(dur, (k) => {
+      a.pos[0] = from[0] + dx * k;
+      a.pos[2] = from[2] + dz * k;
+      let hop = isKnight ? Math.sin(k * Math.PI) * 1.25 : Math.abs(Math.sin(k * Math.PI * 3)) * 0.07;
+      a.pos[1] = from[1] + hop;
+      a.yaw = lerpAngle(startYaw, targetYaw, Math.min(1, k * 1.6));
+      a.tiltZ = isKnight ? 0 : Math.sin(k * Math.PI * 3) * 0.03;
+      const ns = Math.floor(k * dist * 1.4);
+      if (ns > steps) { steps = ns; if (!isKnight) sfx.step(); }
+      applyActor(a);
+    });
+    a.pos[1] = toPos[1]; a.tiltZ = 0;
+    applyActor(a);
+  }
+  async function battle(attacker, defender) {
+    const dPos = [...defender.pos];
+    const dir = [dPos[0] - attacker.pos[0], 0, dPos[2] - attacker.pos[2]];
+    const dl = Math.hypot(dir[0], dir[2]) || 1;
+    dir[0] /= dl; dir[2] /= dl;
+    const approach = [dPos[0] - dir[0] * 2.9, BASE_Y, dPos[2] - dir[2] * 2.9];
+    await walkTo(attacker, approach, 0.8);
+    attacker.yaw = faceYaw(attacker, dir[0], dir[2]);
+    applyActor(attacker);
+    for (let hit = 0; hit < 2; hit++) {
+      const basePos = [...attacker.pos];
+      await tween(0.2, (k) => {
+        attacker.pos[0] = basePos[0] + dir[0] * 0.6 * k;
+        attacker.pos[2] = basePos[2] + dir[2] * 0.6 * k;
+        attacker.wpnSwing = 1.2 * k;
+        applyActor(attacker);
+      }, easeOut);
+      sfx.hit(); camShake = 0.28;
+      const dBase = { tiltZ: defender.tiltZ, scaleF: defender.scaleF };
+      tween(0.22, (k) => {
+        defender.tiltZ = Math.sin(k * Math.PI * 4) * 0.1 * (1 - k);
+        defender.scaleF = 1 + Math.sin(k * Math.PI) * 0.07;
+        applyActor(defender);
+      }).then(() => { defender.tiltZ = dBase.tiltZ; defender.scaleF = 1; applyActor(defender); });
+      await tween(0.2, (k) => {
+        attacker.pos[0] = basePos[0] + dir[0] * 0.6 * (1 - k);
+        attacker.pos[2] = basePos[2] + dir[2] * 0.6 * (1 - k);
+        attacker.wpnSwing = 1.2 * (1 - k);
+        applyActor(attacker);
+      });
+      attacker.wpnSwing = 0;
+      if (hit === 0) await tween(0.12, () => {});
+    }
+    // girna
+    sfx.fall();
+    const fallAlongX = Math.abs(dir[0]) > Math.abs(dir[2]);
+    await tween(0.55, (k) => {
+      const ang = k * 1.5;
+      if (fallAlongX) defender.tiltZ = (dir[0] > 0 ? -ang : ang);
+      else defender.tiltX = (dir[2] > 0 ? ang : -ang);
+      if (k > 0.55) defender.pos[1] = BASE_Y - (k - 0.55) * 2.4;
+      applyActor(defender);
+    }, easeOut);
+    defender.pos[1] = -80; defender.tiltX = 0; defender.tiltZ = 0;
+    applyActor(defender);
+    await walkTo(attacker, [dPos[0], BASE_Y, dPos[2]], 0.7);
+    attacker.yaw = lerpAngle(attacker.yaw, 0, 1);
+    attacker.yaw = 0; applyActor(attacker);
+  }
+
+  // ---------- game flow ----------
+  let animating = false;
+  const statusEl = $('status-line');
+  const logEl = $('log');
+  function setStatus(t) { statusEl.textContent = t; }
+  function addLog(html) {
+    moveLog.unshift(html);
+    if (moveLog.length > 40) moveLog.pop();
+    logEl.innerHTML = moveLog.map((x) => `<div>${x}</div>`).join('');
+  }
+  function updateTray() {
+    $('cap-by-b').textContent = capturedBy.b.length ? capturedBy.b.map((t) => GLYPH[t]).join(' ') : '—';
+    $('cap-by-r').textContent = capturedBy.r.length ? capturedBy.r.map((t) => GLYPH[t]).join(' ') : '—';
+  }
+  function resetActorsToStart() {
+    for (let sq = 0; sq < 64; sq++) {
+      const p = board[sq]; if (!p) continue;
+      const [x, z] = sqToXZ(sq);
+      const a = p.actor;
+      a.pos = [x, BASE_Y, z]; a.yaw = 0; a.tiltX = 0; a.tiltZ = 0; a.scaleF = 1; a.wpnSwing = 0;
+      applyActor(a);
+    }
+    for (const team of ['b', 'r']) for (let i = 0; i < 2; i++) {
+      const a = actors[`pc-${team}-qx${i}`];
+      if (a.pos[1] > -50) { a.pos[1] = -80; applyActor(a); }
+    }
+  }
+  function startNewGame() {
+    // purane actors ko unki jagah par wapas
+    for (const id in actors) {
+      const a = actors[id];
+      a.tiltX = 0; a.tiltZ = 0; a.scaleF = 1; a.wpnSwing = 0; a.yaw = 0;
+    }
+    newGameState();
+    resetActorsToStart();
+    clearMarkers(); parkMarker(markers.check);
+    $('overlay').style.display = 'none';
+    logEl.innerHTML = ''; updateTray();
+    setStatus('तुम्हारी बारी — नीली सेना। मोहरा चुनो, राजा साहब!');
+    addLog('<b>नया खेल शुरू!</b> तुम नीले राजा हो।');
+  }
+
+  async function executeMove(m, byPlayer) {
+    animating = true;
+    clearMarkers(); selected = -1;
+    const piece = m.piece;
+    const a = piece.actor;
+    const epRef = { v: epSq };
+    const defender = m.epCapture || m.captured || null;
+    const fromSq = m.from, toSq = m.to;
+    applyOnBoard(board, m, epRef);
+    epSq = epRef.v;
+    if (defender) {
+      capturedBy[piece.color].push(defender.type);
+      updateTray();
+      await battle(a, defender.actor);
+    } else {
+      const [x, z] = sqToXZ(toSq);
+      await walkTo(a, [x, BASE_Y, z]);
+      a.yaw = 0; applyActor(a);
+    }
+    if (m.castle) {
+      const rook = board[m.rookTo];
+      if (rook) {
+        const [x, z] = sqToXZ(m.rookTo);
+        await walkTo(rook.actor, [x, BASE_Y, z], 0.8);
+        rook.actor.yaw = 0; applyActor(rook.actor);
+      }
+    }
+    if (m.promo) {
+      // pyade ki jagah spare rani khadi karo
+      const team = piece.color;
+      if (spareUsed[team] < 2) {
+        const spare = actors[`pc-${team}-qx${spareUsed[team]++}`];
+        const [x, z] = sqToXZ(toSq);
+        a.pos[1] = -80; applyActor(a);
+        spare.pos = [x, BASE_Y, z]; spare.yaw = 0; spare.tiltX = 0; spare.tiltZ = 0;
+        applyActor(spare);
+        piece.actor = spare;
+      } else {
+        a.scaleF = 1.35; applyActor(a);
+      }
+      addLog(`👑 ${alg(toSq)} पर प्यादा <b>रानी</b> बन गया!`);
+    }
+    const enemy = piece.color === 'b' ? 'r' : 'b';
+    const enemyMoves = legalMoves(board, enemy, epSq);
+    const inCheck = isAttacked(board, kingSq(board, enemy), piece.color);
+    const moverName = piece.color === 'b' ? 'नीला' : 'लाल';
+    let line = `${moverName} ${NAMES[piece.type]}: ${alg(fromSq)} → ${alg(toSq)}`;
+    if (defender) line += ` — <b>${NAMES[defender.type]} मारा गया ⚔️</b>`;
+    if (inCheck && enemyMoves.length) line += ' — <b>शह!</b>';
+    addLog(line);
+    parkMarker(markers.check);
+    if (inCheck) {
+      placeMarker(markers.check, kingSq(board, enemy), 0.09);
+      sfx.check();
+      const tk = throneKings[enemy];
+      const baseTilt = 0;
+      tween(0.9, (k) => {
+        tk.tiltZ = Math.sin(k * Math.PI * 5) * 0.06 * (1 - k) + baseTilt;
+        applyActor(tk);
+      }).then(() => { tk.tiltZ = 0; applyActor(tk); });
+    }
+    if (!enemyMoves.length) {
+      gameOver = true;
+      if (inCheck) {
+        const loserKing = board[kingSq(board, enemy)];
+        if (loserKing) {
+          const ka = loserKing.actor;
+          tween(0.8, (k) => { ka.tiltX = (enemy === 'b' ? -1 : 1) * k * 1.45; applyActor(ka); }, easeOut);
+        }
+        const winner = piece.color;
+        const tk = throneKings[winner];
+        const homeY = tk.pos[1];
+        tween(1.6, (k) => { tk.pos[1] = homeY + Math.abs(Math.sin(k * Math.PI * 3)) * 0.5; applyActor(tk); })
+          .then(() => { tk.pos[1] = homeY; applyActor(tk); });
+        if (winner === 'b') {
+          sfx.win();
+          $('ov-title').textContent = '🏆 तुम जीत गए, राजा साहब!';
+          $('ov-text').textContent = 'लाल राजा हार गया — अखाड़ा तुम्हारा हुआ!';
+        } else {
+          sfx.lose();
+          $('ov-title').textContent = '💥 लाल राजा जीत गया';
+          $('ov-text').textContent = 'इस बार चालें उसकी भारी पड़ीं। फिर कोशिश करो!';
+        }
+      } else {
+        $('ov-title').textContent = '🤝 खेल बराबर';
+        $('ov-text').textContent = 'कोई चाल बाकी नहीं — खेल ड्रॉ हुआ।';
+      }
+      setStatus('खेल ख़त्म!');
+      setTimeout(() => { $('overlay').style.display = 'flex'; }, 1400);
+      animating = false;
+      return;
+    }
+    turn = enemy;
+    animating = false;
+    if (turn === 'r') {
+      setStatus(inCheck ? 'शह! लाल राजा सोच रहा है…' : 'लाल राजा सोच रहा है…');
+      if (!window.__gameTestMode) setTimeout(async () => {
+        if (gameOver) return;
+        const mv = pickAiMove();
+        if (mv) await executeMove(mv, false);
+      }, 350);
+    } else {
+      setStatus(inCheck ? '⚠️ शह! तुम्हारा राजा ख़तरे में है — बचाओ!' : 'तुम्हारी बारी — नीली सेना।');
+    }
+  }
+
+  function selectPiece(sq) {
+    selected = sq;
+    clearMarkers();
+    placeMarker(markers.sel, sq, 0.07);
+    legalCache = legalMoves(board, 'b', epSq).filter((m) => m.from === sq);
+    let mi = 0, ci = 0;
+    for (const m of legalCache) {
+      if (m.captured || m.epCapture) { if (ci < markers.caps.length) placeMarker(markers.caps[ci++], m.to, 0.08); }
+      else if (mi < markers.moves.length) placeMarker(markers.moves[mi++], m.to, 0.06);
+    }
+    sfx.select();
+  }
+  function onSquareClick(sq) {
+    if (animating || gameOver || turn !== 'b') return;
+    if (selected >= 0) {
+      const m = legalCache.find((x) => x.to === sq);
+      if (m) { executeMove(m, true); return; }
+    }
+    const p = board[sq];
+    if (p && p.color === 'b') selectPiece(sq);
+    else { selected = -1; clearMarkers(); }
+  }
+
+  // ---------- camera + picking ----------
+  const camTarget = [...scene.camera.target];
+  const off = [scene.camera.eye[0] - camTarget[0], scene.camera.eye[1] - camTarget[1], scene.camera.eye[2] - camTarget[2]];
+  let radius = Math.hypot(...off);
+  let theta = Math.atan2(off[0], off[2]);
+  let phi = Math.acos(Math.min(1, Math.max(-1, off[1] / radius)));
+  const fit = () => {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(canvas.clientWidth * dpr);
+    canvas.height = Math.round(canvas.clientHeight * dpr);
+    renderer.resize();
+  };
+  window.addEventListener('resize', fit);
+  fit();
+
+  let dragging = false, lx = 0, ly = 0, downX = 0, downY = 0, downT = 0;
+  canvas.addEventListener('pointerdown', (e) => {
+    dragging = true; lx = downX = e.clientX; ly = downY = e.clientY; downT = performance.now();
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - lx, dy = e.clientY - ly;
+    if (Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 7) {
+      theta -= dx * 0.005;
+      phi = Math.min(1.45, Math.max(0.12, phi - dy * 0.005));
+    }
+    lx = e.clientX; ly = e.clientY;
+  });
+  canvas.addEventListener('pointerup', (e) => {
+    dragging = false;
+    const moved = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY);
+    if (moved <= 7 && performance.now() - downT < 600) handlePick(e);
+  });
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    radius = Math.min(150, Math.max(16, radius * (e.deltaY > 0 ? 1.1 : 0.9)));
+  }, { passive: false });
+
+  function currentEye() {
+    return [
+      camTarget[0] + radius * Math.sin(phi) * Math.sin(theta),
+      camTarget[1] + radius * Math.cos(phi),
+      camTarget[2] + radius * Math.sin(phi) * Math.cos(theta),
+    ];
+  }
+  function handlePick(e) {
+    const rect = canvas.getBoundingClientRect();
+    const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    const eye = currentEye();
+    const fwd = [camTarget[0] - eye[0], camTarget[1] - eye[1], camTarget[2] - eye[2]];
+    const fl = Math.hypot(...fwd); fwd.forEach((v, i) => fwd[i] = v / fl);
+    const right = [fwd[2], 0, -fwd[0]];
+    const rl = Math.hypot(...right) || 1; right.forEach((v, i) => right[i] = v / rl);
+    const up = [right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]];
+    const tanF = Math.tan((scene.camera.fov * Math.PI / 180) / 2);
+    const aspect = rect.width / rect.height;
+    const dir = [0, 1, 2].map((i) => fwd[i] + right[i] * ndcX * tanF * aspect + up[i] * ndcY * tanF);
+    if (Math.abs(dir[1]) < 1e-5) return;
+    const t = (BASE_Y - eye[1]) / dir[1];
+    if (t <= 0) return;
+    const px = eye[0] + dir[0] * t, pz = eye[2] + dir[2] * t;
+    const file = Math.round(px / 4 + 3.5);
+    const rank = Math.round(3.5 - pz / 4);
+    if (file < 0 || file > 7 || rank < 0 || rank > 7) { selected = -1; clearMarkers(); return; }
+    onSquareClick(rank * 8 + file);
+  }
+
+  // view presets
+  let viewMode = 'akhada';
+  function setView(mode) {
+    viewMode = mode;
+    const targetPos = mode === 'raja' ? [0, 2.5, 6] : [0, 1.5, 0];
+    const targetSph = mode === 'raja'
+      ? { theta: 0, phi: 1.25, radius: 40 }
+      : { theta: 0.66, phi: 1.02, radius: 62 };
+    const from = { tx: camTarget[0], ty: camTarget[1], tz: camTarget[2], theta, phi, radius };
+    tween(1.1, (k) => {
+      camTarget[0] = from.tx + (targetPos[0] - from.tx) * k;
+      camTarget[1] = from.ty + (targetPos[1] - from.ty) * k;
+      camTarget[2] = from.tz + (targetPos[2] - from.tz) * k;
+      theta = lerpAngle(from.theta, targetSph.theta, k);
+      phi = from.phi + (targetSph.phi - from.phi) * k;
+      radius = from.radius + (targetSph.radius - from.radius) * k;
+    });
+    $('btn-view').textContent = mode === 'raja' ? 'दृश्य: राजा' : 'दृश्य: अखाड़ा';
+  }
+
+  // ---------- buttons ----------
+  $('btn-new').addEventListener('click', () => { if (!animating) startNewGame(); });
+  $('btn-again').addEventListener('click', () => { if (!animating) startNewGame(); });
+  const levels = [['आसान', 1, 60], ['मध्यम', 2, 12], ['कठिन', 3, 0]];
+  let levelIdx = 1;
+  $('btn-level').addEventListener('click', () => {
+    levelIdx = (levelIdx + 1) % 3;
+    const [name, d, n] = levels[levelIdx];
+    aiDepth = d; aiNoise = n;
+    $('btn-level').textContent = 'कठिनाई: ' + name;
+  });
+  $('btn-view').addEventListener('click', () => setView(viewMode === 'akhada' ? 'raja' : 'akhada'));
+  $('btn-sound').addEventListener('click', () => {
+    soundOn = !soundOn;
+    $('btn-sound').textContent = 'आवाज़: ' + (soundOn ? 'चालू' : 'बंद');
+  });
+
+  // ---------- render loop ----------
+  renderer.shadowsDirty = true;
+  const start = performance.now();
+  let firstFrame = true;
+  function loop() {
+    const now = performance.now();
+    const t = (now - start) / 1000;
+    stepTweens(now);
+    if (camShake > 0.01) camShake *= 0.82; else camShake = 0;
+    if (partsDirty) {
+      renderer.updateParts(scene.parts, { checks: false });
+      renderer.shadowsDirty = true;
+      partsDirty = false;
+    }
+    const eye = currentEye();
+    if (camShake) {
+      eye[0] += (Math.random() - 0.5) * camShake;
+      eye[1] += (Math.random() - 0.5) * camShake * 0.6;
+    }
+    renderer.render({
+      ...scene.camera, eye, target: camTarget,
+      environment: scene.environment, effects: scene.effects,
+      exposure: scene.effects?.exposure, time: t,
+    });
+    if (firstFrame) {
+      firstFrame = false;
+      loadingEl.style.display = 'none';
+      window.__ready = true;
+    }
+    requestAnimationFrame(loop);
+  }
+  startNewGame();
+  loop();
+
+  // test hooks
+  window.__game = {
+    state: () => ({ turn, gameOver, animating,
+      board: board.map((p) => p ? p.color + p.type : null) }),
+    move: (fromAlg, toAlg) => {
+      const parse = (s) => (s.charCodeAt(0) - 97) + (s.charCodeAt(1) - 49) * 8;
+      const from = parse(fromAlg), to = parse(toAlg);
+      const ms = legalMoves(board, turn, epSq).filter((m) => m.from === from && m.to === to);
+      if (ms.length) { executeMove(ms[0], true); return true; }
+      return false;
+    },
+    actors,
+  };
+} catch (err) {
+  console.error(err);
+  fail('खेल load नहीं हो पाया।\nइस browser में WebGL2 चाहिए — Chrome/Edge के नए version में खोलकर देखो।\n(' + (err?.message || err) + ')');
+}
+</script>
+</body>
+</html>
